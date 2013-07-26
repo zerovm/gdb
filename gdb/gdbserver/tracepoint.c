@@ -2354,8 +2354,6 @@ cmd_qtinit (char *packet)
   /* Make sure we don't try to read from a trace frame.  */
   current_traceframe = -1;
 
-  stop_tracing ();
-
   trace_debug ("Initializing the trace");
 
   clear_installed_tracepoints ();

@@ -22,6 +22,7 @@
 #include "arch-utils.h"
 #include "frame.h"
 #include "gdbcore.h"
+#include "inferior.h"
 #include "regcache.h"
 #include "osabi.h"
 #include "symtab.h"
@@ -31,6 +32,7 @@
 #include "amd64-linux-tdep.h"
 #include "i386-linux-tdep.h"
 #include "linux-tdep.h"
+#include "nacl-tdep.h"
 #include "i386-xstate.h"
 
 #include "gdb_string.h"
@@ -1607,6 +1609,35 @@ amd64_x32_linux_init_abi(struct gdbarch_info info, struct gdbarch *gdbarch)
   set_solib_svr4_fetch_link_map_offsets
     (gdbarch, svr4_ilp32_fetch_link_map_offsets);
 }
+
+static CORE_ADDR nacl_sandbox_base = 0x440a00000000UL;
+
+static CORE_ADDR
+nacl_pointer_to_address (struct gdbarch *gdbarch,
+                         struct type *type,
+                         const gdb_byte *buf)
+{
+  CORE_ADDR addr = unsigned_pointer_to_address (gdbarch, type, buf);
+
+  if (addr)
+    addr = nacl_sandbox_base + (unsigned) addr;
+
+  return addr;
+}
+
+void
+set_gdbarch_nacl_pointer_to_address (struct gdbarch *gdbarch)
+{
+  set_gdbarch_pointer_to_address (gdbarch, nacl_pointer_to_address);
+}
+
+static void
+amd64_nacl_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
+{
+  amd64_linux_init_abi (info, gdbarch);
+
+  set_gdbarch_nacl_pointer_to_address (gdbarch);
+}
 
 
 /* Provide a prototype to silence -Wmissing-prototypes.  */
@@ -1619,6 +1650,10 @@ _initialize_amd64_linux_tdep (void)
 			  GDB_OSABI_LINUX, amd64_linux_init_abi);
   gdbarch_register_osabi (bfd_arch_i386, bfd_mach_x64_32,
 			  GDB_OSABI_LINUX, amd64_x32_linux_init_abi);
+
+  gdbarch_register_nacl_osabi_sniffer ();
+  gdbarch_register_osabi (bfd_arch_i386, bfd_mach_x86_64,
+  			  GDB_OSABI_NACL, amd64_nacl_linux_init_abi);
 
   /* Initialize the Linux target description.  */
   initialize_tdesc_amd64_linux ();

@@ -543,7 +543,9 @@ value_available_contents_eq (const struct value *val1, int offset1,
 {
   int idx1 = 0, idx2 = 0;
 
-  /* See function description in value.h.  */
+  /* This routine is used by printing routines, where we should
+     already have read the value.  Note that we only know whether a
+     value chunk is available if we've tried to read it.  */
   gdb_assert (!val1->lazy && !val2->lazy);
 
   while (length > 0)
