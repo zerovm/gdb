@@ -63,6 +63,7 @@
 
 #include "psymtab.h"
 #include "parser-defs.h"
+#include "elf-bfd.h"
 
 /* Prototypes for local functions */
 
@@ -1775,6 +1776,8 @@ lookup_symbol_global (const char *name,
   struct symbol *sym = NULL;
   struct objfile *objfile = NULL;
   struct global_sym_lookup_data lookup_data;
+  struct obj_section *obj_section;
+  CORE_ADDR addr;
 
   /* Call library-specific lookup procedure.  */
   objfile = lookup_objfile_from_block (block);
@@ -1790,6 +1793,14 @@ lookup_symbol_global (const char *name,
     (objfile != NULL ? get_objfile_arch (objfile) : target_gdbarch (),
      lookup_symbol_global_iterator_cb, &lookup_data, objfile);
 
+  if (lookup_data.result) {
+	  obj_section = SYMBOL_OBJ_SECTION (lookup_data.result);
+	  addr = SYMBOL_VALUE_ADDRESS (lookup_data.result);
+	  if (obj_section && obj_section->objfile && nacl_bfd_p(obj_section->objfile->obfd)) {
+		  lookup_data.result->ginfo.value.address = ZEROVM_BASE + (unsigned) addr;
+		  gdb_assert(nacl_sandbox_address_p(lookup_data.result->ginfo.value.address));
+	  }
+  }
   return lookup_data.result;
 }
 

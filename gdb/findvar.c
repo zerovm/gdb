@@ -34,6 +34,8 @@
 #include "block.h"
 #include "objfiles.h"
 #include "language.h"
+#include "elf-bfd.h"
+
 
 /* Basic byte-swapping routines.  All 'extract' functions return a
    host-format integer from a target-format integer at ADDR which is
@@ -612,6 +614,12 @@ default_read_var_value (struct symbol *var, struct frame_info *frame)
 	if (obj_section
 	    && (obj_section->the_bfd_section->flags & SEC_THREAD_LOCAL) != 0)
 	  addr = target_translate_tls_address (obj_section->objfile, addr);
+
+	if (obj_section && obj_section->objfile && nacl_bfd_p(obj_section->objfile->obfd)) {
+		addr = ZEROVM_BASE + (unsigned) addr;
+		gdb_assert(nacl_sandbox_address_p(addr));
+	}
+
 	v = allocate_value_lazy (type);
       }
       break;

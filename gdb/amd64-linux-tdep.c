@@ -1610,27 +1610,6 @@ amd64_x32_linux_init_abi(struct gdbarch_info info, struct gdbarch *gdbarch)
     (gdbarch, svr4_ilp32_fetch_link_map_offsets);
 }
 
-static CORE_ADDR nacl_sandbox_base = 0x440a00000000UL;
-
-static CORE_ADDR
-nacl_pointer_to_address (struct gdbarch *gdbarch,
-                         struct type *type,
-                         const gdb_byte *buf)
-{
-  CORE_ADDR addr = unsigned_pointer_to_address (gdbarch, type, buf);
-
-  if (addr)
-    addr = nacl_sandbox_base + (unsigned) addr;
-
-  return addr;
-}
-
-void
-set_gdbarch_nacl_pointer_to_address (struct gdbarch *gdbarch)
-{
-  set_gdbarch_pointer_to_address (gdbarch, nacl_pointer_to_address);
-}
-
 static void
 amd64_nacl_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 {

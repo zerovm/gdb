@@ -20,6 +20,7 @@
 #include "defs.h"
 #include "elf-bfd.h"
 #include "osabi.h"
+#include "gdbtypes.h"
 
 int
 nacl_bfd_p (bfd *abfd)
@@ -45,4 +46,32 @@ gdbarch_register_nacl_osabi_sniffer (void)
 {
   gdbarch_register_osabi_sniffer (bfd_arch_i386, bfd_target_elf_flavour,
 				  nacl_osabi_sniffer);
+}
+
+static CORE_ADDR
+nacl_pointer_to_address (struct gdbarch *gdbarch,
+		struct type *type,
+		const gdb_byte *buf)
+{
+	CORE_ADDR addr = unsigned_pointer_to_address (gdbarch, type, buf);
+
+	if (addr)
+		addr = ZEROVM_BASE + (unsigned) addr;
+	return addr;
+}
+
+void
+set_gdbarch_nacl_pointer_to_address (struct gdbarch *gdbarch)
+{
+  set_gdbarch_pointer_to_address (gdbarch, nacl_pointer_to_address);
+}
+
+int
+nacl_sandbox_address_p (CORE_ADDR addr)
+{
+  if (addr >= ZEROVM_BASE &&
+      addr < ZEROVM_BASE + 4ULL * 1024ULL * 1024ULL * 1024ULL)
+    return 1;
+
+  return 0;
 }

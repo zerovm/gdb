@@ -601,6 +601,9 @@ enum gdb_osabi
   GDB_OSABI_INVALID		/* keep this last */
 };
 
+#define ZEROVM_BASE 0x440a00000000UL
+#define NACL_ENTRY_POINT 0x440a00020000UL
+
 /* Global functions from other, non-gdb GNU thingies.
    Libiberty thingies are no longer declared here.  We include libiberty.h
    above, instead.  */
