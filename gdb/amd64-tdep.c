@@ -2704,6 +2704,148 @@ static const struct frame_unwind amd64_epilogue_frame_unwind =
   amd64_epilogue_frame_sniffer
 };
 
+static enum unwind_stop_reason
+nacl_syscall_seg_frame_unwind_stop_reason (struct frame_info *this_frame,
+					   void **this_cache)
+{
+  return UNWIND_NO_REASON;
+}
+
+static void
+nacl_syscall_seg_frame_this_id (struct frame_info *this_frame,
+				void **this_cache,
+				struct frame_id *this_id)
+{
+  CORE_ADDR pc;
+  CORE_ADDR rbx;
+
+  /* We checked pc is available in the sniffer.  */
+  pc = get_frame_pc (this_frame);
+
+  /* rbx is callee-saved thus unwindable.
+     In NaClSyscallSeg, final rbx value is initial rsp value.  */
+  rbx = get_frame_register_unsigned (this_frame, AMD64_RBX_REGNUM);
+
+  (*this_id) = frame_id_build (rbx, pc);
+}
+
+static struct value *
+nacl_syscall_seg_frame_prev_register (struct frame_info *this_frame,
+				      void **this_cache, int regnum)
+{
+  CORE_ADDR rbx;
+
+  /* Seems NaClSyscallSeg does not change rbp, r12-r15.  */
+  if (regnum == AMD64_RBP_REGNUM ||
+      regnum == AMD64_R12_REGNUM ||
+      regnum == AMD64_R13_REGNUM ||
+      regnum == AMD64_R14_REGNUM ||
+      regnum == AMD64_R15_REGNUM)
+    return frame_unwind_got_register (this_frame, regnum, regnum);
+
+  /* rbx is callee-saved thus unwindable.
+     In NaClSyscallSeg, final rbx value is initial rsp value.  */
+  rbx = get_frame_register_unsigned (this_frame, AMD64_RBX_REGNUM);
+
+  /* Previous pc is at the top of stack.  */
+  if (regnum == AMD64_RIP_REGNUM)
+    return frame_unwind_got_constant (
+	this_frame, regnum,
+	read_memory_unsigned_integer (rbx, 8, BFD_ENDIAN_LITTLE));
+
+  /* Initial rsp is previous rsp adjusted by call instruction.  */
+  if (regnum == AMD64_RSP_REGNUM)
+    return frame_unwind_got_constant (this_frame, regnum, rbx + 8);
+
+  /* Several registers are saved in stack.  */
+  if (regnum == AMD64_RDI_REGNUM)
+    return frame_unwind_got_constant (
+        this_frame, regnum,
+        read_memory_unsigned_integer (rbx - 0x18 + 0x0, 4, BFD_ENDIAN_LITTLE));
+  if (regnum == AMD64_RSI_REGNUM)
+    return frame_unwind_got_constant (
+        this_frame, regnum,
+        read_memory_unsigned_integer (rbx - 0x18 + 0x4, 4, BFD_ENDIAN_LITTLE));
+  if (regnum == AMD64_RDX_REGNUM)
+    return frame_unwind_got_constant (
+        this_frame, regnum,
+        read_memory_unsigned_integer (rbx - 0x18 + 0x8, 4, BFD_ENDIAN_LITTLE));
+  if (regnum == AMD64_RCX_REGNUM)
+    return frame_unwind_got_constant (
+        this_frame, regnum,
+        read_memory_unsigned_integer (rbx - 0x18 + 0xc, 4, BFD_ENDIAN_LITTLE));
+  if (regnum == AMD64_R8_REGNUM)
+    return frame_unwind_got_constant (
+        this_frame, regnum,
+        read_memory_unsigned_integer (rbx - 0x18 + 0x10, 4, BFD_ENDIAN_LITTLE));
+  if (regnum == AMD64_R9_REGNUM)
+    return frame_unwind_got_constant (
+        this_frame, regnum,
+        read_memory_unsigned_integer (rbx - 0x18 + 0x14, 4, BFD_ENDIAN_LITTLE));
+
+  /* Give up for now...
+     TODO: any good ideas to restore previous rbx?
+     TODO: fp, xmm, and more registers are unchanged!  */
+  return frame_unwind_got_optimized (this_frame, regnum);
+}
+
+static int
+nacl_syscall_seg_frame_sniffer (const struct frame_unwind *self,
+				struct frame_info *this_frame,
+				void **this_prologue_cache)
+{
+  CORE_ADDR pc;
+  struct minimal_symbol *addr_sym;
+
+  /* If this is the innermost frame, we are executing a switch.
+     Do not mess until fully switched.  */
+  if (frame_relative_level (this_frame) == 0)
+    return 0;
+
+  if (!get_frame_pc_if_available (this_frame, &pc))
+    return 0;
+
+  /* pc should be inside NaClSyscallSeg, pointing after the call of
+     NaClSyscallCSegHook:
+
+       e8 ?? ?? ?? ??       	callq  ???????? <NaClSyscallCSegHook>
+     =>f4                   	hlt
+
+     Tried to check the fixed offset from the beginning of NaClSyscallSeg, but
+     seems it may vary...
+
+     Instead, hope there is just one NaClSyscallCSegHook call and try checking
+     the actual instruction sequence.  */
+  addr_sym = lookup_minimal_symbol ("SyscallHook", NULL, NULL);
+  if (addr_sym)
+    {
+      gdb_byte buf[6];
+
+      if (!safe_frame_unwind_memory (this_frame, pc - 5, buf, 6)) {
+        return 0;
+      }
+
+      if (buf[0] == 0xe8 &&
+          extract_unsigned_integer (buf + 1, 4, BFD_ENDIAN_LITTLE) ==
+              SYMBOL_VALUE_ADDRESS(addr_sym) - pc &&
+          buf[5] == 0xf4) {
+        return 1;
+      }
+    }
+  return 0;
+}
+
+static const struct frame_unwind nacl_syscall_seg_frame_unwind =
+{
+  /* Not a NORMAL_FRAME! Stack switch does not pass frame_id_inner!  */
+  ARCH_FRAME,
+  nacl_syscall_seg_frame_unwind_stop_reason,
+  nacl_syscall_seg_frame_this_id,
+  nacl_syscall_seg_frame_prev_register,
+  NULL,
+  nacl_syscall_seg_frame_sniffer
+};
+
 static struct frame_id
 amd64_dummy_id (struct gdbarch *gdbarch, struct frame_info *this_frame)
 {
@@ -2938,6 +3080,7 @@ amd64_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 
   set_gdbarch_dummy_id (gdbarch, amd64_dummy_id);
 
+  frame_unwind_prepend_unwinder (gdbarch, &nacl_syscall_seg_frame_unwind);
   /* Hook the function epilogue frame unwinder.  This unwinder is
      appended to the list first, so that it supercedes the other
      unwinders in function epilogues.  */

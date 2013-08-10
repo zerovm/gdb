@@ -656,6 +656,11 @@ call_function_by_hand (struct value *function, int nargs, struct value **args)
 
 	real_pc = funaddr;
 	dummy_addr = entry_point_address ();
+	/* ZVM: we have a hardcoded entry point offset in the process memory space */
+	if (gdbarch_osabi (gdbarch) == GDB_OSABI_NACL)
+		{
+			dummy_addr = NACL_ENTRY_POINT;
+		}
 
 	/* A call dummy always consists of just a single breakpoint, so
 	   its address is the same as the address of the dummy.
