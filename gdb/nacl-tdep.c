@@ -54,16 +54,35 @@ nacl_pointer_to_address (struct gdbarch *gdbarch,
 		const gdb_byte *buf)
 {
 	CORE_ADDR addr = unsigned_pointer_to_address (gdbarch, type, buf);
-
-	if (addr)
-		addr = ZEROVM_BASE + (unsigned) addr;
+	if (TYPE_LENGTH(type) == 4) {
+		if (addr)
+			addr = ZEROVM_BASE + (unsigned) addr;
+	}
 	return addr;
+}
+
+static void
+nacl_address_to_pointer (struct gdbarch *gdbarch,
+		struct type *type, gdb_byte *buf, CORE_ADDR addr)
+{
+	if (nacl_sandbox_address_p(addr)) {
+		addr = (unsigned) addr;
+		type->length = 4;
+	}
+	enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+	store_unsigned_integer (buf, TYPE_LENGTH (type), byte_order, addr);
 }
 
 void
 set_gdbarch_nacl_pointer_to_address (struct gdbarch *gdbarch)
 {
   set_gdbarch_pointer_to_address (gdbarch, nacl_pointer_to_address);
+}
+
+void
+set_gdbarch_nacl_address_to_pointer (struct gdbarch *gdbarch)
+{
+  set_gdbarch_address_to_pointer (gdbarch, nacl_address_to_pointer);
 }
 
 int

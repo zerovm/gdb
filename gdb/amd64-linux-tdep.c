@@ -1616,6 +1616,7 @@ amd64_nacl_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
   amd64_linux_init_abi (info, gdbarch);
 
   set_gdbarch_nacl_pointer_to_address (gdbarch);
+  set_gdbarch_nacl_address_to_pointer (gdbarch);
 }
 
 
