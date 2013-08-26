@@ -494,13 +494,23 @@ default_read_var_value (struct symbol *var, struct frame_info *frame)
       return v;
 
     case LOC_STATIC:
-      v = allocate_value_lazy (type);
-      if (overlay_debugging)
-	addr = symbol_overlayed_address (SYMBOL_VALUE_ADDRESS (var),
-					 SYMBOL_OBJ_SECTION (var));
-      else
-	addr = SYMBOL_VALUE_ADDRESS (var);
-      break;
+    {
+    	struct obj_section *obj_section;
+    	v = allocate_value_lazy (type);
+    	if (overlay_debugging)
+    		addr = symbol_overlayed_address (SYMBOL_VALUE_ADDRESS (var),
+    				SYMBOL_OBJ_SECTION (var));
+    	else
+    		addr = SYMBOL_VALUE_ADDRESS (var);
+    	obj_section = SYMBOL_OBJ_SECTION (var);
+    	if (obj_section && obj_section->objfile
+    			&& obj_section->the_bfd_section && !(obj_section->the_bfd_section->flags & SEC_CODE)
+    			&& nacl_bfd_p(obj_section->objfile->obfd)) {
+    		addr = ZEROVM_BASE + (unsigned) addr;
+    		gdb_assert(nacl_sandbox_address_p(addr));
+    	}
+    	break;
+    }
 
     case LOC_ARG:
       addr = get_frame_args_address (frame);
